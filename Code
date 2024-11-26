@@ -1,0 +1,140 @@
+from google.colab import drive
+drive.mount('/content/drive')
+%cd '/content/drive/MyDrive/assn2/train'
+import cv2
+from google.colab.patches import cv2_imshow #for image display
+# import matplotlib.pyplot as plt
+import numpy as np
+import os
+import time as tm
+def rotate_image(image, angle):
+  image_center = tuple(np.array(image.shape[1::-1]) / 2)
+  rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+  result = cv2.warpAffine(image, rot_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+  return result
+def thin_lines(image, kernel_size):
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))  # create a structuring element for erosion
+    thinned = cv2.erode(binary, kernel, iterations=1)
+    return thinned
+folder_path = '/content/drive/MyDrive/assn2/train'
+
+# filepaths = [ os.path.join(folder_path, '%d.png') % i for i in range( 2000 ) ]
+# file = open( "/content/drive/MyDrive/assn2/train/labels.txt", "r" )
+# gold_output = file.read().splitlines()
+# file.close()
+
+file = open( os.path.join(folder_path, 'labels.txt'), "r" )
+y_train1=file.read().splitlines()
+file.close()
+
+num_test = 2000
+
+tic=tm.perf_counter()
+
+lim = 87
+
+y1=np.zeros(num_test, dtype = int)
+
+k=0
+for k in range(num_test):
+  if y_train1[k]=='EVEN':
+    y1[k]=1
+
+predictions=np.zeros(num_test, dtype = int)
+
+tic=tm.perf_counter()
+
+angles = [-30,-20,-10,0,10,20,30]
+
+folder_path = '/content/drive/MyDrive/assn2/reference'
+
+filepaths = [ os.path.join(folder_path, '%d.png') % i for i in range( 16 ) ]
+
+ref_imgs = np.empty((16, 7), dtype=object)
+
+for j in range(16):
+
+  f = filepaths[j]
+  ref = cv2.imread(f)
+  l = ref[5:95, 3:93]
+
+  l = thin_lines(l,2)
+
+  # l = black(l)
+  # l = cv2.bitwise_not(l)
+
+  l = cv2.resize(l, (lim, lim))
+
+  for i in range(7):
+    a = angles[i]
+    rotated = rotate_image(l, a)
+    ref_imgs[j][i] = rotated
+
+ref_imgs = np.array(ref_imgs)
+
+pred = np.zeros([16,7])
+
+for f in range(num_test):
+
+  img = cv2.imread('%d.png' % f)
+  # cv2_imshow(img)
+
+  k = img[10:100,360:450]           #cropping
+
+  k = thin_lines(k,2)
+
+  # k = black(k)
+  # k = cv2.bitwise_not(k)
+
+  k_resized = cv2.resize(k, (lim, lim))
+
+  for i in range(16):  # letters/digits
+
+    for j in range(7): # rotations
+
+      l_resized = ref_imgs[i][j]
+
+      m = np.subtract(k_resized, l_resized)
+
+      sum = np.sum(m[0:lim, 0:lim])
+      avg = sum
+      pred[i,j] = avg
+
+  pos = np.argwhere(pred == np.min(pred))
+
+  # alpha=[0,1,2,3,4,5,6,7,8,9,'A','B','C','D','E','F']
+
+  o=pos[0,0]
+
+  if o == 0 or o==2 or o==4 or o==6 or o==8 or o==10 or o==12 or o==14:
+    predictions[f]=1
+
+toc=tm.perf_counter()
+
+accuracy = np.mean(predictions == y1[:num_test])
+
+print(f"Accuracy : {accuracy}")
+
+print("Time (per image) : ",(toc-tic)/num_test)
+import sys
+import numpy
+numpy.set_printoptions(threshold=sys.maxsize)
+Array=cv2.imread('/content/drive/MyDrive/assn2/reference/%d.png' %0)
+%cd '/content'      ---->current path - content
+file = open("file1.txt", "w+")
+# Saving the array in a text file
+content = str(Array)
+file.write(content)
+file.close()
+print(content)
+print(predictions)
+print(y1)
+e=[]
+for i in range(num_test):
+  if (predictions[i] != y1[i]):
+    e.append(i)
+print('Images not predicted properly : ', e)
